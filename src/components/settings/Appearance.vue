@@ -47,10 +47,10 @@
                         class="btn-check"
                         name="theme"
                         autocomplete="off"
-                        value="auto"
+                        value="system"
                     />
                     <label class="btn btn-outline-primary" for="btncheck3">
-                        {{ $t("Auto") }}
+                        System
                     </label>
                 </div>
             </div>

@@ -290,6 +290,76 @@
                 </div>
             </div>
 
+            <div v-if="monitor.type !== 'group'" class="shadow-box big-padding uptime-window-box">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                    <h3 class="mb-0">{{ $t("Uptime Window") }}</h3>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button
+                            v-for="preset in uptimeWindowPresets"
+                            :key="preset.key"
+                            type="button"
+                            class="btn btn-outline-primary"
+                            :class="{ active: uptimeWindow.preset === preset.key }"
+                            @click="setUptimeWindowPreset(preset)"
+                        >
+                            {{ preset.label }}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-5">
+                        <label for="uptime-window-start" class="form-label">{{ $t("Start") }}</label>
+                        <input
+                            id="uptime-window-start"
+                            v-model="uptimeWindow.start"
+                            type="datetime-local"
+                            class="form-control"
+                            @input="uptimeWindow.preset = 'custom'"
+                        />
+                    </div>
+                    <div class="col-md-5">
+                        <label for="uptime-window-end" class="form-label">{{ $t("End") }}</label>
+                        <input
+                            id="uptime-window-end"
+                            v-model="uptimeWindow.end"
+                            type="datetime-local"
+                            class="form-control"
+                            @input="uptimeWindow.preset = 'custom'"
+                        />
+                    </div>
+                    <div class="col-md-2 d-grid">
+                        <button
+                            type="button"
+                            class="btn btn-primary"
+                            :disabled="uptimeWindow.loading"
+                            @click="applyUptimeWindow"
+                        >
+                            {{ $t("Apply") }}
+                        </button>
+                    </div>
+                </div>
+
+                <div v-if="uptimeWindow.result" class="row text-center mt-4 uptime-window-result">
+                    <div class="col-6 col-md-3">
+                        <div class="label">{{ $t("Window Uptime") }}</div>
+                        <div class="value">{{ formatUptimeWindowPercent(uptimeWindow.result.uptime) }}</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="label">{{ $t("Window Avg. Ping") }}</div>
+                        <div class="value">{{ formatUptimeWindowPing(uptimeWindow.result.avgPing) }}</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="label">{{ $t("Samples") }}</div>
+                        <div class="value">{{ uptimeWindow.result.total }}</div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="label">{{ $t("Precision") }}</div>
+                        <div class="value">{{ $t(uptimeWindow.result.precision) }}</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Cert Info Box -->
             <transition name="slide-fade" appear>
                 <div v-if="showCertInfoBox" class="shadow-box big-padding text-center">
@@ -497,6 +567,13 @@ export default {
                 currentExample: "javascript-fetch",
                 code: "",
             },
+            uptimeWindow: {
+                preset: "24h",
+                start: "",
+                end: "",
+                loading: false,
+                result: null,
+            },
             deleteChildrenMonitors: false,
         };
     },
@@ -602,6 +679,36 @@ export default {
                 return "";
             }
         },
+
+        uptimeWindowPresets() {
+            return [
+                {
+                    key: "1h",
+                    label: this.$t("hours", 1),
+                    hours: 1,
+                },
+                {
+                    key: "24h",
+                    label: this.$t("hours", 24),
+                    hours: 24,
+                },
+                {
+                    key: "7d",
+                    label: this.$t("days", 7),
+                    hours: 24 * 7,
+                },
+                {
+                    key: "30d",
+                    label: this.$t("days", 30),
+                    hours: 24 * 30,
+                },
+                {
+                    key: "1y",
+                    label: this.$t("years", 1),
+                    hours: 24 * 365,
+                },
+            ];
+        },
     },
 
     watch: {
@@ -611,6 +718,9 @@ export default {
 
         monitor(to) {
             this.getImportantHeartbeatListLength();
+            if (to && to.type !== "group") {
+                this.setUptimeWindowPreset(this.getSelectedUptimeWindowPreset());
+            }
         },
         "monitor.type"() {
             if (this.monitor && this.monitor.type === "push") {
@@ -633,6 +743,10 @@ export default {
             }
             this.loadPushExample();
         }
+
+        if (this.monitor && this.monitor.type !== "group") {
+            this.setUptimeWindowPreset(this.getSelectedUptimeWindowPreset());
+        }
     },
 
     beforeUnmount() {
@@ -641,6 +755,110 @@ export default {
 
     methods: {
         getResBaseURL,
+        /**
+         * Convert a date to a datetime-local input value.
+         * @param {Date} date Date
+         * @returns {string} datetime-local value
+         */
+        toDateTimeLocalValue(date) {
+            const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+            return local.toISOString().slice(0, 16);
+        },
+
+        /**
+         * Get the selected preset, or 24h if the current mode is custom.
+         * @returns {{key: string, hours: number}} Preset
+         */
+        getSelectedUptimeWindowPreset() {
+            return this.uptimeWindowPresets.find((item) => item.key === this.uptimeWindow.preset) || this.uptimeWindowPresets[1];
+        },
+
+        /**
+         * Set the uptime window from a preset.
+         * @param {{key: string, hours: number}} preset Preset
+         * @param {boolean} fetchResult Whether to fetch immediately
+         * @returns {void}
+         */
+        setUptimeWindowPreset(preset, fetchResult = true) {
+            if (!preset) {
+                return;
+            }
+
+            const end = new Date();
+            const start = new Date(end.getTime() - preset.hours * 60 * 60 * 1000);
+
+            this.uptimeWindow.preset = preset.key;
+            this.uptimeWindow.start = this.toDateTimeLocalValue(start);
+            this.uptimeWindow.end = this.toDateTimeLocalValue(end);
+
+            if (fetchResult) {
+                this.applyUptimeWindow();
+            }
+        },
+
+        /**
+         * Load uptime data for the selected window.
+         * @returns {void}
+         */
+        applyUptimeWindow() {
+            if (!this.monitor || !this.uptimeWindow.start || !this.uptimeWindow.end) {
+                return;
+            }
+
+            const start = new Date(this.uptimeWindow.start);
+            const end = new Date(this.uptimeWindow.end);
+
+            if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+                this.$root.toastError(this.$t("Invalid date range"));
+                return;
+            }
+
+            this.uptimeWindow.loading = true;
+            this.$root.getSocket().emit(
+                "getMonitorUptimeWindow",
+                this.monitor.id,
+                {
+                    start: start.toISOString(),
+                    end: end.toISOString(),
+                },
+                (res) => {
+                    this.uptimeWindow.loading = false;
+
+                    if (res.ok) {
+                        this.uptimeWindow.result = res.data;
+                    } else {
+                        this.$root.toastError(res.msg);
+                    }
+                }
+            );
+        },
+
+        /**
+         * Format a decimal uptime value.
+         * @param {number|null} uptime Uptime
+         * @returns {string} Formatted uptime
+         */
+        formatUptimeWindowPercent(uptime) {
+            if (uptime === null || uptime === undefined) {
+                return this.$t("notAvailableShort");
+            }
+
+            return Math.round(uptime * 10000) / 100 + "%";
+        },
+
+        /**
+         * Format an average ping value.
+         * @param {number|null} ping Ping
+         * @returns {string} Formatted ping
+         */
+        formatUptimeWindowPing(ping) {
+            if (ping === null || ping === undefined) {
+                return this.$t("notAvailableShort");
+            }
+
+            return Math.round(ping * 100) / 100 + " ms";
+        },
+
         /**
          * Request a test notification be sent for this monitor
          * @returns {void}
@@ -935,6 +1153,25 @@ export default {
 .shadow-box {
     padding: 20px;
     margin-top: 25px;
+}
+
+.uptime-window-box {
+    h3 {
+        font-size: 20px;
+    }
+
+    .uptime-window-result {
+        .label {
+            color: $secondary-text;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+
+        .value {
+            font-size: 24px;
+            font-weight: 600;
+        }
+    }
 }
 
 .word {

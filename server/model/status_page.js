@@ -19,6 +19,7 @@ const {
     MAINTENANCE,
     DOWN,
     INCIDENT_PAGE_SIZE,
+    appName,
 } = require("../../src/util");
 
 class StatusPage extends BeanModel {
@@ -80,7 +81,7 @@ class StatusPage extends BeanModel {
         const { incidents, heartbeats, statusDescription } = await StatusPage.getRSSPageData(statusPage);
 
         // Use custom RSS title if set, otherwise fall back to status page title
-        let feedTitle = "Uptime Kuma RSS Feed";
+        let feedTitle = `${appName} RSS Feed`;
         if (statusPage.rss_title) {
             feedTitle = statusPage.rss_title;
         } else if (statusPage.title) {
@@ -501,7 +502,7 @@ class StatusPage extends BeanModel {
      */
     getIcon() {
         if (!this.icon) {
-            return "/icon.svg";
+            return "/overwatch-mark.png";
         } else {
             return this.icon;
         }

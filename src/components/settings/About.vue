@@ -1,8 +1,7 @@
 <template>
     <div class="d-flex justify-content-center align-items-center">
         <div class="logo d-flex flex-column justify-content-center align-items-center">
-            <object class="my-4" width="200" height="200" data="/icon.svg" />
-            <div class="fs-4 fw-bold">Uptime Kuma</div>
+            <BrandLogo class="my-4 fs-4" :label="$root.appName" />
             <div>{{ $t("versionIs", { version: $root.info.version }) }}</div>
             <div class="frontend-version">{{ $t("frontendVersionIs", { version: $root.frontendVersion }) }}</div>
 
@@ -11,7 +10,7 @@
             </div>
 
             <div class="my-3 update-link">
-                <a href="https://github.com/louislam/uptime-kuma/releases" target="_blank" rel="noopener">
+                <a href="https://github.com/jeetkreditserve/overwatch/releases" target="_blank" rel="noopener">
                     {{ $t("Check Update On GitHub") }}
                 </a>
             </div>
@@ -47,7 +46,13 @@
 </template>
 
 <script>
+import BrandLogo from "../BrandLogo.vue";
+
 export default {
+    components: {
+        BrandLogo,
+    },
+
     computed: {
         settings() {
             return this.$parent.$parent.$parent.settings;

@@ -104,7 +104,7 @@
                 class="form-control"
                 required
                 autocomplete="false"
-                placeholder='"Uptime Kuma" &lt;example@kuma.pet&gt;'
+                placeholder='"Overwatch" &lt;alerts@example.com&gt;'
             />
             <div class="form-text"></div>
         </div>

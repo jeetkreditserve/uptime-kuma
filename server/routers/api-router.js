@@ -18,12 +18,76 @@ const { Prometheus } = require("../prometheus");
 const Database = require("../database");
 const { UptimeCalculator } = require("../uptime-calculator");
 const { Settings } = require("../settings");
+const { exportTokenStore, streamDataArchive, streamHistoryJson } = require("../export-data");
 
 let router = express.Router();
 
 let cache = apicache.middleware;
 const server = UptimeKumaServer.getInstance();
 let io = server.io;
+
+router.get("/api/export/data-archive", async (request, response) => {
+    try {
+        const payload = exportTokenStore.consume(request.query.token, "data-archive");
+
+        if (!payload) {
+            response.status(403).json({
+                ok: false,
+                msg: "Invalid or expired export token",
+            });
+            return;
+        }
+
+        await streamDataArchive(response, {
+            dataDir: Database.dataDir,
+        });
+    } catch (error) {
+        log.error("export", error.message);
+
+        if (!response.headersSent) {
+            response.status(500).json({
+                ok: false,
+                msg: error.message,
+            });
+        } else {
+            response.destroy(error);
+        }
+    }
+});
+
+router.get("/api/export/history.json", async (request, response) => {
+    try {
+        const payload = exportTokenStore.consume(request.query.token, "history-json");
+
+        if (!payload) {
+            response.status(403).json({
+                ok: false,
+                msg: "Invalid or expired export token",
+            });
+            return;
+        }
+
+        if (request.query.scope && request.query.scope !== payload.options.scope) {
+            throw new Error("Export scope does not match token");
+        }
+
+        await streamHistoryJson(response, {
+            userID: payload.userID,
+            scope: payload.options.scope,
+        });
+    } catch (error) {
+        log.error("export", error.message);
+
+        if (!response.headersSent) {
+            response.status(500).json({
+                ok: false,
+                msg: error.message,
+            });
+        } else {
+            response.destroy(error);
+        }
+    }
+});
 
 router.get("/api/entry-page", async (request, response) => {
     allowDevAllOrigin(response);

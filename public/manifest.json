@@ -1,8 +1,8 @@
 {
-    "name": "Uptime Kuma",
-    "short_name": "Uptime Kuma",
-    "description": "An easy-to-use self-hosted monitoring tool.",
-    "theme_color": "#5cdd8b",
+    "name": "Overwatch",
+    "short_name": "Overwatch",
+    "description": "Overwatch monitoring dashboard.",
+    "theme_color": "#53ace0",
     "start_url": "/",
     "background_color": "#fff",
     "display": "standalone",

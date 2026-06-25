@@ -1,8 +1,17 @@
+import themeHelper from "../theme-helper";
+
+const {
+    getThemeColorMeta,
+    normalizeThemePreference,
+    resolveThemePreference,
+} = themeHelper;
+
 export default {
     data() {
         return {
             system: window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",
-            userTheme: localStorage.theme,
+            systemThemeMediaQuery: null,
+            userTheme: normalizeThemePreference(localStorage.theme),
             userHeartbeatBar: localStorage.heartbeatBarTheme,
             styleElapsedTime: localStorage.styleElapsedTime,
             statusPageTheme: "light",
@@ -12,9 +21,13 @@ export default {
     },
 
     mounted() {
-        // Default Light
-        if (!this.userTheme) {
-            this.userTheme = "auto";
+        this.systemThemeMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+        this.system = this.getSystemTheme();
+
+        if (this.systemThemeMediaQuery.addEventListener) {
+            this.systemThemeMediaQuery.addEventListener("change", this.updateSystemTheme);
+        } else if (this.systemThemeMediaQuery.addListener) {
+            this.systemThemeMediaQuery.addListener(this.updateSystemTheme);
         }
 
         // Default Heartbeat Bar
@@ -31,32 +44,26 @@ export default {
         this.updateThemeColorMeta();
     },
 
+    beforeUnmount() {
+        if (this.systemThemeMediaQuery?.removeEventListener) {
+            this.systemThemeMediaQuery.removeEventListener("change", this.updateSystemTheme);
+        } else if (this.systemThemeMediaQuery?.removeListener) {
+            this.systemThemeMediaQuery.removeListener(this.updateSystemTheme);
+        }
+    },
+
     computed: {
         theme() {
             // As entry can be status page now, set forceStatusPageTheme to true to use status page theme
             if (this.forceStatusPageTheme) {
-                if (this.statusPageTheme === "auto") {
-                    return this.system;
-                }
-                return this.statusPageTheme;
-            }
-
-            // Entry no need dark
-            if (this.path === "") {
-                return "light";
+                return resolveThemePreference(this.statusPageTheme, this.system);
             }
 
             if (this.path.startsWith("/status-page") || this.path.startsWith("/status")) {
-                if (this.statusPageTheme === "auto") {
-                    return this.system;
-                }
-                return this.statusPageTheme;
-            } else {
-                if (this.userTheme === "auto") {
-                    return this.system;
-                }
-                return this.userTheme;
+                return resolveThemePreference(this.statusPageTheme, this.system);
             }
+
+            return resolveThemePreference(this.userTheme, this.system);
         },
 
         isDark() {
@@ -70,7 +77,7 @@ export default {
         },
 
         userTheme(to, from) {
-            localStorage.theme = to;
+            localStorage.theme = normalizeThemePreference(to);
         },
 
         styleElapsedTime(to, from) {
@@ -99,11 +106,23 @@ export default {
          * @returns {void}
          */
         updateThemeColorMeta() {
-            if (this.theme === "dark") {
-                document.querySelector("#theme-color").setAttribute("content", "#161B22");
-            } else {
-                document.querySelector("#theme-color").setAttribute("content", "#5cdd8b");
-            }
+            document.querySelector("#theme-color").setAttribute("content", getThemeColorMeta(this.theme));
+        },
+
+        /**
+         * Get the current operating-system color scheme.
+         * @returns {"light"|"dark"} Current system color scheme
+         */
+        getSystemTheme() {
+            return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        },
+
+        /**
+         * Refresh the computed system theme when the OS preference changes.
+         * @returns {void}
+         */
+        updateSystemTheme() {
+            this.system = this.getSystemTheme();
         },
     },
 };

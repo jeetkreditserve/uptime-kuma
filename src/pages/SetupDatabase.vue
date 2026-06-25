@@ -2,8 +2,7 @@
     <div v-if="show" class="form-container">
         <form @submit.prevent="submit">
             <div>
-                <object width="64" height="64" data="/icon.svg" />
-                <div style="font-size: 28px; font-weight: bold; margin-top: 5px">Uptime Kuma</div>
+                <BrandLogo class="setup-brand" :label="$root.appName" />
             </div>
 
             <div v-if="info.runningSetup" class="mt-5">
@@ -177,11 +176,16 @@
 
 <script>
 import axios from "axios";
+import BrandLogo from "../components/BrandLogo.vue";
 import { useToast } from "vue-toastification";
 import { sleep } from "../util.ts";
 const toast = useToast();
 
 export default {
+    components: {
+        BrandLogo,
+    },
+
     data() {
         return {
             show: false,

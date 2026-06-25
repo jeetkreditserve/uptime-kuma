@@ -3,8 +3,7 @@
         <div class="form">
             <form @submit.prevent="submit">
                 <div>
-                    <object width="64" height="64" data="/icon.svg" />
-                    <div style="font-size: 28px; font-weight: bold; margin-top: 5px">Uptime Kuma</div>
+                    <BrandLogo class="setup-brand" :label="$root.appName" />
                 </div>
 
                 <p class="mt-3">
@@ -73,7 +72,13 @@
 </template>
 
 <script>
+import BrandLogo from "../components/BrandLogo.vue";
+
 export default {
+    components: {
+        BrandLogo,
+    },
+
     data() {
         return {
             processing: false,

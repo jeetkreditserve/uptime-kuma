@@ -277,6 +277,49 @@ describe("Uptime Calculator", () => {
         assert.strictEqual(c2.get24Hour().avgPing, 0.25);
     });
 
+    test("getDataInRange() calculates uptime and average ping for a custom minute window", async () => {
+        UptimeCalculator.currentDate = dayjs.utc("2023-08-12 12:05:00");
+
+        let c2 = new UptimeCalculator();
+        await c2.update(UP, 100, dayjs.utc("2023-08-12 12:00:15"));
+        await c2.update(DOWN, 0, dayjs.utc("2023-08-12 12:01:20"));
+        await c2.update(PENDING, 0, dayjs.utc("2023-08-12 12:02:30"));
+        await c2.update(UP, 200, dayjs.utc("2023-08-12 12:03:00"));
+
+        let data = c2.getDataInRange("2023-08-12T12:00:00.000Z", "2023-08-12T12:03:59.999Z");
+
+        assert.strictEqual(data.uptime, 0.5);
+        assert.strictEqual(data.avgPing, 150);
+        assert.strictEqual(data.up, 2);
+        assert.strictEqual(data.down, 2);
+        assert.strictEqual(data.total, 4);
+        assert.strictEqual(data.precision, "minute");
+    });
+
+    test("getDataInRange() returns null uptime when the custom window has no samples", () => {
+        UptimeCalculator.currentDate = dayjs.utc("2023-08-12 12:05:00");
+
+        let c2 = new UptimeCalculator();
+        let data = c2.getDataInRange("2023-08-12T12:00:00.000Z", "2023-08-12T12:03:59.999Z");
+
+        assert.strictEqual(data.uptime, null);
+        assert.strictEqual(data.avgPing, null);
+        assert.strictEqual(data.up, 0);
+        assert.strictEqual(data.down, 0);
+        assert.strictEqual(data.total, 0);
+    });
+
+    test("getDataInRange() rejects ranges longer than one year", () => {
+        UptimeCalculator.currentDate = dayjs.utc("2023-08-12 12:05:00");
+
+        let c2 = new UptimeCalculator();
+
+        assert.throws(
+            () => c2.getDataInRange("2022-08-11T12:05:00.000Z", "2023-08-12T12:05:00.000Z"),
+            /maximum range is 365 days/
+        );
+    });
+
     test("get7Day() calculates 7-day uptime correctly", async () => {
         UptimeCalculator.currentDate = dayjs.utc("2023-08-12 20:46:59");
 

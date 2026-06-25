@@ -696,7 +696,7 @@ export default {
             incident: null,
             previousIncident: null,
             showImageCropUpload: false,
-            imgDataUrl: "/icon.svg",
+            imgDataUrl: "/overwatch-mark.png",
             loadedTheme: false,
             loadedData: false,
             baseURL: "",
@@ -1262,7 +1262,7 @@ export default {
         },
 
         /**
-         * Reset logo image to default (public/icon.svg)
+         * Reset logo image to default (public/overwatch-mark.png)
          * @returns {void}
          */
         resetToDefaultImage() {
@@ -1270,7 +1270,7 @@ export default {
                 return;
             }
 
-            this.imgDataUrl = "/icon.svg";
+            this.imgDataUrl = "/overwatch-mark.png";
             this.config.icon = this.imgDataUrl;
             toast.success(this.$t("imageResetConfirmation"));
         },

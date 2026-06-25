@@ -27,6 +27,7 @@ const Notifications = () => import("./components/settings/Notifications.vue");
 import ReverseProxy from "./components/settings/ReverseProxy.vue";
 import Tags from "./components/settings/Tags.vue";
 import MonitorHistory from "./components/settings/MonitorHistory.vue";
+import Export from "./components/settings/Export.vue";
 const Security = () => import("./components/settings/Security.vue");
 import Proxies from "./components/settings/Proxies.vue";
 import About from "./components/settings/About.vue";
@@ -110,6 +111,10 @@ const routes = [
                             {
                                 path: "monitor-history",
                                 component: MonitorHistory,
+                            },
+                            {
+                                path: "export",
+                                component: Export,
                             },
                             {
                                 path: "docker-hosts",

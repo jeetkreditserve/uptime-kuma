@@ -520,17 +520,18 @@ class UptimeCalculator {
      * Convert timestamp to key
      * @param {dayjs.Dayjs} datetime Datetime
      * @param {"day" | "hour" | "minute"} type the type of data which is expected to be returned
+     * @param {boolean} createIfMissing Whether to create a missing bucket, defaults to true
      * @returns {number} Timestamp
      * @throws {Error} If the type is invalid
      */
-    getKey(datetime, type) {
+    getKey(datetime, type, createIfMissing = true) {
         switch (type) {
             case "day":
-                return this.getDailyKey(datetime);
+                return this.getDailyKey(datetime, createIfMissing);
             case "hour":
-                return this.getHourlyKey(datetime);
+                return this.getHourlyKey(datetime, createIfMissing);
             case "minute":
-                return this.getMinutelyKey(datetime);
+                return this.getMinutelyKey(datetime, createIfMissing);
             default:
                 throw new Error("Invalid type");
         }
@@ -685,6 +686,89 @@ class UptimeCalculator {
         }
         uptimeData.avgPing = avgPing;
         return uptimeData;
+    }
+
+    /**
+     * Get uptime data for a specific date-time range.
+     * @param {string|Date|dayjs.Dayjs} start Start date-time
+     * @param {string|Date|dayjs.Dayjs} end End date-time
+     * @returns {{uptime: number|null, avgPing: number|null, up: number, down: number, total: number, precision: "minute"|"hour"|"day", start: string, end: string}} Uptime window data
+     * @throws {Error} If the range is invalid
+     */
+    getDataInRange(start, end) {
+        let startDate = dayjs.utc(start);
+        let endDate = dayjs.utc(end);
+        let now = this.getCurrentDate();
+
+        if (!startDate.isValid() || !endDate.isValid()) {
+            throw new Error("Invalid date range");
+        }
+
+        if (!endDate.isAfter(startDate)) {
+            throw new Error("End time must be after start time");
+        }
+
+        if (startDate.isAfter(now)) {
+            throw new Error("The selected range is in the future");
+        }
+
+        if (endDate.isAfter(now)) {
+            endDate = now;
+        }
+
+        if (endDate.diff(startDate, "day", true) > 365) {
+            throw new Error("The maximum range is 365 days");
+        }
+
+        const durationHours = endDate.diff(startDate, "hour", true);
+        let precision;
+        let step;
+        let dataList;
+
+        if (durationHours <= 24) {
+            precision = "minute";
+            step = 60;
+            dataList = this.minutelyUptimeDataList;
+        } else if (durationHours <= 24 * 30) {
+            precision = "hour";
+            step = 3600;
+            dataList = this.hourlyUptimeDataList;
+        } else {
+            precision = "day";
+            step = 86400;
+            dataList = this.dailyUptimeDataList;
+        }
+
+        const startKey = this.getKey(startDate, precision, false);
+        const endKey = this.getKey(endDate, precision, false);
+        let up = 0;
+        let down = 0;
+        let totalPing = 0;
+
+        for (let key = startKey; key <= endKey; key += step) {
+            const data = dataList[key];
+
+            if (!data) {
+                continue;
+            }
+
+            up += data.up;
+            down += data.down;
+            totalPing += data.avgPing * data.up;
+        }
+
+        const total = up + down;
+
+        return {
+            uptime: total > 0 ? up / total : null,
+            avgPing: up > 0 ? totalPing / up : null,
+            up,
+            down,
+            total,
+            precision,
+            start: startDate.toISOString(),
+            end: endDate.toISOString(),
+        };
     }
 
     /**
