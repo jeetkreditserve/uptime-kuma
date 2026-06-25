@@ -1,6 +1,7 @@
 const { checkLogin } = require("../util-server");
 const { UptimeCalculator } = require("../uptime-calculator");
 const { log } = require("../../src/util");
+const { R } = require("redbean-node");
 
 module.exports.chartSocketHandler = (socket) => {
     socket.on("getMonitorChartData", async (monitorID, period, callback) => {
@@ -27,6 +28,36 @@ module.exports.chartSocketHandler = (socket) => {
             callback({
                 ok: true,
                 data,
+            });
+        } catch (e) {
+            callback({
+                ok: false,
+                msg: e.message,
+            });
+        }
+    });
+
+    socket.on("getMonitorChartDataInRange", async (monitorID, range, callback) => {
+        try {
+            checkLogin(socket);
+
+            log.debug("monitor", `Get Monitor Chart Data In Range: ${monitorID} User ID: ${socket.userID}`);
+
+            const monitor = await R.findOne("monitor", " id = ? AND user_id = ? ", [monitorID, socket.userID]);
+
+            if (!monitor) {
+                throw new Error("Monitor not found.");
+            }
+
+            if (!range || !range.start || !range.end) {
+                throw new Error("Invalid date range");
+            }
+
+            const uptimeCalculator = await UptimeCalculator.getUptimeCalculator(monitorID);
+
+            callback({
+                ok: true,
+                data: uptimeCalculator.getDataArrayInRange(range.start, range.end),
             });
         } catch (e) {
             callback({

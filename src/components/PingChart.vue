@@ -1,6 +1,6 @@
 <template>
     <div>
-        <div class="period-options">
+        <div v-if="!isRangeMode" class="period-options">
             <button
                 type="button"
                 class="btn btn-light dropdown-toggle btn-period-toggle"
@@ -21,6 +21,9 @@
                     </button>
                 </li>
             </ul>
+        </div>
+        <div v-else class="period-options range-period-label">
+            {{ rangeLabel }}
         </div>
         <div class="chart-wrapper" :class="{ loading: loading }">
             <Line :data="chartData" :options="chartOptions" />
@@ -67,6 +70,11 @@ export default {
             type: Number,
             required: true,
         },
+        /** Optional applied custom date range */
+        range: {
+            type: Object,
+            default: null,
+        },
     },
     data() {
         return {
@@ -85,10 +93,21 @@ export default {
             },
 
             chartRawData: null,
+            chartRawDataPrecision: null,
             chartDataFetchInterval: null,
         };
     },
     computed: {
+        isRangeMode() {
+            return Boolean(this.range && this.range.start && this.range.end);
+        },
+        rangeLabel() {
+            if (!this.isRangeMode) {
+                return "";
+            }
+
+            return `${this.formatRangeDateTime(this.range.start)} - ${this.formatRangeDateTime(this.range.end)}`;
+        },
         chartOptions() {
             return {
                 responsive: true,
@@ -215,7 +234,7 @@ export default {
             };
         },
         chartData() {
-            if (this.chartPeriodHrs === "0") {
+            if (!this.isRangeMode && this.chartPeriodHrs === "0") {
                 return this.getChartDatapointsFromHeartbeatList();
             } else {
                 return this.getChartDatapointsFromStats();
@@ -225,6 +244,10 @@ export default {
     watch: {
         // Update chart data when the selected chart period changes
         chartPeriodHrs: function (newPeriod) {
+            if (this.isRangeMode) {
+                return;
+            }
+
             if (this.chartDataFetchInterval) {
                 clearInterval(this.chartDataFetchInterval);
                 this.chartDataFetchInterval = null;
@@ -233,6 +256,7 @@ export default {
             // eslint-disable-next-line eqeqeq
             if (newPeriod == "0") {
                 this.heartbeatList = null;
+                this.chartRawDataPrecision = null;
                 this.$root.storage()["chart-period"] = newPeriod;
             } else {
                 this.loading = true;
@@ -244,6 +268,7 @@ export default {
                     // Invalid period
                     period = 24;
                 }
+                this.chartRawDataPrecision = this.getPrecisionForHours(period);
 
                 this.$root.getMonitorChartData(this.monitorId, period, (res) => {
                     if (!res.ok) {
@@ -267,8 +292,28 @@ export default {
                 );
             }
         },
+        range: {
+            deep: true,
+            handler() {
+                if (!this.isRangeMode) {
+                    return;
+                }
+
+                if (this.chartDataFetchInterval) {
+                    clearInterval(this.chartDataFetchInterval);
+                    this.chartDataFetchInterval = null;
+                }
+
+                this.loadRangeChartData();
+            },
+        },
     },
     created() {
+        if (this.isRangeMode) {
+            this.loadRangeChartData();
+            return;
+        }
+
         // Load chart period from storage if saved
         let period = this.$root.storage()["chart-period"];
         if (period != null) {
@@ -287,6 +332,60 @@ export default {
         }
     },
     methods: {
+        formatRangeDateTime(value) {
+            return this.$root.toDayjs(value).format("DD-MM-YYYY HH:mm");
+        },
+        getRangeDurationHours(range) {
+            const start = this.$root.toDayjs(range.start);
+            const end = this.$root.toDayjs(range.end);
+            return end.diff(start, "hour", true);
+        },
+        getPrecisionForHours(hours) {
+            if (hours <= 24) {
+                return "minute";
+            }
+
+            if (hours <= 24 * 30) {
+                return "hour";
+            }
+
+            return "day";
+        },
+        getGapThreshold(period, monitorInterval) {
+            const oneSecond = 1000;
+            const oneMinute = oneSecond * 60;
+            const oneHour = oneMinute * 60;
+            const oneDay = oneHour * 24;
+            const monitorGapThreshold = monitorInterval ? monitorInterval * oneSecond * 10 : 0;
+
+            if (this.chartRawDataPrecision === "day") {
+                return Math.max(oneDay * 2, monitorGapThreshold);
+            }
+
+            if (this.chartRawDataPrecision === "hour" || period > 24) {
+                return Math.max(oneHour * 10, monitorGapThreshold);
+            }
+
+            return Math.max(oneMinute * 10, monitorGapThreshold);
+        },
+        loadRangeChartData() {
+            if (!this.isRangeMode) {
+                return;
+            }
+
+            this.loading = true;
+            this.chartRawData = null;
+            this.chartRawDataPrecision = this.getPrecisionForHours(this.getRangeDurationHours(this.range));
+
+            this.$root.getMonitorChartDataInRange(this.monitorId, this.range, (res) => {
+                if (!res.ok) {
+                    this.$root.toastError(res.msg);
+                } else {
+                    this.chartRawData = res.data;
+                }
+                this.loading = false;
+            });
+        },
         // Get color of bar chart for this datapoint
         getBarColorForDatapoint(datapoint) {
             if (datapoint.maintenance != null) {
@@ -449,7 +548,7 @@ export default {
             let downData = []; // Down Data for Bar Chart, y-axis is number of down datapoints in this period
             let colorData = []; // Color Data for Bar Chart
 
-            const period = parseInt(this.chartPeriodHrs);
+            const period = this.isRangeMode ? this.getRangeDurationHours(this.range) : parseInt(this.chartPeriodHrs);
             let aggregatePoints = period > 6 ? 12 : 4;
 
             let aggregateBuffer = [];
@@ -466,13 +565,7 @@ export default {
                     // Insert empty datapoint to separate big gaps
                     if (lastHeartbeatTime && monitorInterval) {
                         const diff = Math.abs(beatTime.diff(lastHeartbeatTime));
-                        const oneSecond = 1000;
-                        const oneMinute = oneSecond * 60;
-                        const oneHour = oneMinute * 60;
-                        if (
-                            (period <= 24 && diff > Math.max(oneMinute * 10, monitorInterval * oneSecond * 10)) ||
-                            (period > 24 && diff > Math.max(oneHour * 10, monitorInterval * oneSecond * 10))
-                        ) {
+                        if (diff > this.getGapThreshold(period, monitorInterval)) {
                             // Big gap detected
                             // Clear the aggregate buffer
                             if (aggregateBuffer.length > 0) {
@@ -648,6 +741,16 @@ export default {
         &::after {
             vertical-align: 0.155em;
         }
+
+        .dark & {
+            color: $dark-font-color;
+        }
+    }
+
+    &.range-period-label {
+        color: $link-color;
+        opacity: 0.8;
+        font-size: 0.9em;
 
         .dark & {
             color: $dark-font-color;

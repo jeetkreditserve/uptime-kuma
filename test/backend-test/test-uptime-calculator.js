@@ -320,6 +320,112 @@ describe("Uptime Calculator", () => {
         );
     });
 
+    test("getDataArrayInRange() returns minutely datapoints for a custom chart window", async () => {
+        UptimeCalculator.currentDate = dayjs.utc("2023-08-12 12:05:00");
+
+        let c2 = new UptimeCalculator();
+        await c2.update(UP, 100, dayjs.utc("2023-08-12 12:00:15"));
+        await c2.update(DOWN, 0, dayjs.utc("2023-08-12 12:01:20"));
+        await c2.update(PENDING, 0, dayjs.utc("2023-08-12 12:02:30"));
+        await c2.update(UP, 200, dayjs.utc("2023-08-12 12:03:00"));
+
+        let data = c2.getDataArrayInRange("2023-08-12T12:00:00.000Z", "2023-08-12T12:03:59.999Z");
+
+        assert.deepStrictEqual(
+            data.map((item) => item.timestamp),
+            [
+                dayjs.utc("2023-08-12 12:03:00").unix(),
+                dayjs.utc("2023-08-12 12:02:00").unix(),
+                dayjs.utc("2023-08-12 12:01:00").unix(),
+                dayjs.utc("2023-08-12 12:00:00").unix(),
+            ]
+        );
+        assert.deepStrictEqual(
+            data.map((item) => ({ up: item.up, down: item.down, avgPing: item.avgPing })),
+            [
+                { up: 1, down: 0, avgPing: 200 },
+                { up: 0, down: 1, avgPing: 0 },
+                { up: 0, down: 1, avgPing: 0 },
+                { up: 1, down: 0, avgPing: 100 },
+            ]
+        );
+    });
+
+    test("getDataArrayInRange() uses hourly datapoints for chart windows over 24 hours", async () => {
+        UptimeCalculator.currentDate = dayjs.utc("2023-08-12 12:05:00");
+
+        let c2 = new UptimeCalculator();
+        await c2.update(UP, 100, dayjs.utc("2023-08-10 12:10:00"));
+        await c2.update(DOWN, 0, dayjs.utc("2023-08-11 12:20:00"));
+        await c2.update(UP, 200, dayjs.utc("2023-08-12 12:30:00"));
+
+        let data = c2.getDataArrayInRange("2023-08-10T12:00:00.000Z", "2023-08-12T12:59:59.999Z");
+
+        assert.deepStrictEqual(
+            data.map((item) => item.timestamp),
+            [
+                dayjs.utc("2023-08-12 12:00:00").unix(),
+                dayjs.utc("2023-08-11 12:00:00").unix(),
+                dayjs.utc("2023-08-10 12:00:00").unix(),
+            ]
+        );
+        assert.deepStrictEqual(
+            data.map((item) => ({ up: item.up, down: item.down, avgPing: item.avgPing })),
+            [
+                { up: 1, down: 0, avgPing: 200 },
+                { up: 0, down: 1, avgPing: 0 },
+                { up: 1, down: 0, avgPing: 100 },
+            ]
+        );
+    });
+
+    test("getDataArrayInRange() uses daily datapoints for chart windows over 30 days", async () => {
+        UptimeCalculator.currentDate = dayjs.utc("2023-08-12 12:05:00");
+
+        let c2 = new UptimeCalculator();
+        await c2.update(UP, 100, dayjs.utc("2023-07-01 12:10:00"));
+        await c2.update(DOWN, 0, dayjs.utc("2023-07-20 12:20:00"));
+        await c2.update(UP, 200, dayjs.utc("2023-08-12 12:30:00"));
+
+        let data = c2.getDataArrayInRange("2023-07-01T00:00:00.000Z", "2023-08-12T23:59:59.999Z");
+
+        assert.deepStrictEqual(
+            data.map((item) => item.timestamp),
+            [
+                dayjs.utc("2023-08-12 00:00:00").unix(),
+                dayjs.utc("2023-07-20 00:00:00").unix(),
+                dayjs.utc("2023-07-01 00:00:00").unix(),
+            ]
+        );
+        assert.deepStrictEqual(
+            data.map((item) => ({ up: item.up, down: item.down, avgPing: item.avgPing })),
+            [
+                { up: 1, down: 0, avgPing: 200 },
+                { up: 0, down: 1, avgPing: 0 },
+                { up: 1, down: 0, avgPing: 100 },
+            ]
+        );
+    });
+
+    test("getDataArrayInRange() rejects invalid chart windows", () => {
+        UptimeCalculator.currentDate = dayjs.utc("2023-08-12 12:05:00");
+
+        let c2 = new UptimeCalculator();
+
+        assert.throws(
+            () => c2.getDataArrayInRange("2023-08-12T12:05:00.000Z", "2023-08-12T12:05:00.000Z"),
+            /End time must be after start time/
+        );
+        assert.throws(
+            () => c2.getDataArrayInRange("2023-08-12T12:06:00.000Z", "2023-08-12T12:07:00.000Z"),
+            /selected range is in the future/
+        );
+        assert.throws(
+            () => c2.getDataArrayInRange("2022-08-11T12:05:00.000Z", "2023-08-12T12:05:00.000Z"),
+            /maximum range is 365 days/
+        );
+    });
+
     test("get7Day() calculates 7-day uptime correctly", async () => {
         UptimeCalculator.currentDate = dayjs.utc("2023-08-12 20:46:59");
 

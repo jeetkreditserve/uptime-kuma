@@ -696,48 +696,7 @@ class UptimeCalculator {
      * @throws {Error} If the range is invalid
      */
     getDataInRange(start, end) {
-        let startDate = dayjs.utc(start);
-        let endDate = dayjs.utc(end);
-        let now = this.getCurrentDate();
-
-        if (!startDate.isValid() || !endDate.isValid()) {
-            throw new Error("Invalid date range");
-        }
-
-        if (!endDate.isAfter(startDate)) {
-            throw new Error("End time must be after start time");
-        }
-
-        if (startDate.isAfter(now)) {
-            throw new Error("The selected range is in the future");
-        }
-
-        if (endDate.isAfter(now)) {
-            endDate = now;
-        }
-
-        if (endDate.diff(startDate, "day", true) > 365) {
-            throw new Error("The maximum range is 365 days");
-        }
-
-        const durationHours = endDate.diff(startDate, "hour", true);
-        let precision;
-        let step;
-        let dataList;
-
-        if (durationHours <= 24) {
-            precision = "minute";
-            step = 60;
-            dataList = this.minutelyUptimeDataList;
-        } else if (durationHours <= 24 * 30) {
-            precision = "hour";
-            step = 3600;
-            dataList = this.hourlyUptimeDataList;
-        } else {
-            precision = "day";
-            step = 86400;
-            dataList = this.dailyUptimeDataList;
-        }
+        const { startDate, endDate, precision, step, dataList } = this.getRangeDataSource(start, end);
 
         const startKey = this.getKey(startDate, precision, false);
         const endKey = this.getKey(endDate, precision, false);
@@ -768,6 +727,96 @@ class UptimeCalculator {
             precision,
             start: startDate.toISOString(),
             end: endDate.toISOString(),
+        };
+    }
+
+    /**
+     * Get chart data for a specific date-time range.
+     * @param {string|Date|dayjs.Dayjs} start Start date-time
+     * @param {string|Date|dayjs.Dayjs} end End date-time
+     * @returns {Array<object>} uptime chart data, newest datapoint first
+     * @throws {Error} If the range is invalid
+     */
+    getDataArrayInRange(start, end) {
+        const { startDate, endDate, precision, step, dataList } = this.getRangeDataSource(start, end);
+        const startKey = this.getKey(startDate, precision, false);
+        const endKey = this.getKey(endDate, precision, false);
+        const result = [];
+
+        for (let key = endKey; key >= startKey; key -= step) {
+            const data = dataList[key];
+
+            if (data) {
+                result.push({
+                    ...data,
+                    timestamp: key,
+                });
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Validate a custom date-time range and select the matching data source.
+     * @param {string|Date|dayjs.Dayjs} start Start date-time
+     * @param {string|Date|dayjs.Dayjs} end End date-time
+     * @returns {{startDate: dayjs.Dayjs, endDate: dayjs.Dayjs, precision: "minute"|"hour"|"day", step: number, dataList: LimitQueue<number,string>}} Range data source
+     * @throws {Error} If the range is invalid
+     */
+    getRangeDataSource(start, end) {
+        const startDate = dayjs.utc(start);
+        let endDate = dayjs.utc(end);
+        const now = this.getCurrentDate();
+
+        if (!startDate.isValid() || !endDate.isValid()) {
+            throw new Error("Invalid date range");
+        }
+
+        if (!endDate.isAfter(startDate)) {
+            throw new Error("End time must be after start time");
+        }
+
+        if (startDate.isAfter(now)) {
+            throw new Error("The selected range is in the future");
+        }
+
+        if (endDate.isAfter(now)) {
+            endDate = now;
+        }
+
+        if (endDate.diff(startDate, "day", true) > 365) {
+            throw new Error("The maximum range is 365 days");
+        }
+
+        const durationHours = endDate.diff(startDate, "hour", true);
+
+        if (durationHours <= 24) {
+            return {
+                startDate,
+                endDate,
+                precision: "minute",
+                step: 60,
+                dataList: this.minutelyUptimeDataList,
+            };
+        }
+
+        if (durationHours <= 24 * 30) {
+            return {
+                startDate,
+                endDate,
+                precision: "hour",
+                step: 3600,
+                dataList: this.hourlyUptimeDataList,
+            };
+        }
+
+        return {
+            startDate,
+            endDate,
+            precision: "day",
+            step: 86400,
+            dataList: this.dailyUptimeDataList,
         };
     }
 

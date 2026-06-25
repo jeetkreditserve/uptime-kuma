@@ -730,6 +730,17 @@ export default {
         getMonitorChartData(monitorID, period, callback) {
             socket.emit("getMonitorChartData", monitorID, period, callback);
         },
+
+        /**
+         * Retrieves monitor chart data for a custom date range.
+         * @param {string} monitorID - The ID of the monitor.
+         * @param {{start: string, end: string}} range - The date range for chart data.
+         * @param {socketCB} callback - The callback function to handle the chart data.
+         * @returns {void}
+         */
+        getMonitorChartDataInRange(monitorID, range, callback) {
+            socket.emit("getMonitorChartDataInRange", monitorID, range, callback);
+        },
     },
 
     computed: {

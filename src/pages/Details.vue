@@ -310,22 +310,33 @@
                 <div class="row g-3 align-items-end">
                     <div class="col-md-5">
                         <label for="uptime-window-start" class="form-label">{{ $t("Start") }}</label>
-                        <input
+                        <Datepicker
                             id="uptime-window-start"
                             v-model="uptimeWindow.start"
-                            type="datetime-local"
-                            class="form-control"
-                            @input="uptimeWindow.preset = 'custom'"
+                            class="uptime-window-datepicker"
+                            :dark="$root.isDark"
+                            :monthChangeOnScroll="false"
+                            :maxDate="uptimeWindow.end || uptimeWindowMaxDate"
+                            format="dd-MM-yyyy HH:mm"
+                            :is24="true"
+                            :clearable="false"
+                            @update:model-value="uptimeWindow.preset = 'custom'"
                         />
                     </div>
                     <div class="col-md-5">
                         <label for="uptime-window-end" class="form-label">{{ $t("End") }}</label>
-                        <input
+                        <Datepicker
                             id="uptime-window-end"
                             v-model="uptimeWindow.end"
-                            type="datetime-local"
-                            class="form-control"
-                            @input="uptimeWindow.preset = 'custom'"
+                            class="uptime-window-datepicker"
+                            :dark="$root.isDark"
+                            :monthChangeOnScroll="false"
+                            :minDate="uptimeWindow.start"
+                            :maxDate="uptimeWindowMaxDate"
+                            format="dd-MM-yyyy HH:mm"
+                            :is24="true"
+                            :clearable="false"
+                            @update:model-value="uptimeWindow.preset = 'custom'"
                         />
                     </div>
                     <div class="col-md-2 d-grid">
@@ -375,7 +386,7 @@
             <div v-if="showPingChartBox" class="shadow-box big-padding text-center ping-chart-wrapper">
                 <div class="row">
                     <div class="col">
-                        <PingChart :monitor-id="monitor.id" />
+                        <PingChart :monitor-id="monitor.id" :range="uptimeWindow.appliedRange" />
                     </div>
                 </div>
             </div>
@@ -532,6 +543,7 @@ import "prismjs/components/prism-css";
 import { PrismEditor } from "vue-prism-editor";
 import "vue-prism-editor/dist/prismeditor.min.css";
 import ScreenshotDialog from "../components/ScreenshotDialog.vue";
+import Datepicker from "@vuepic/vue-datepicker";
 
 export default {
     components: {
@@ -547,6 +559,7 @@ export default {
         CertificateInfo,
         PrismEditor,
         ScreenshotDialog,
+        Datepicker,
     },
     data() {
         return {
@@ -569,8 +582,9 @@ export default {
             },
             uptimeWindow: {
                 preset: "24h",
-                start: "",
-                end: "",
+                start: null,
+                end: null,
+                appliedRange: null,
                 loading: false,
                 result: null,
             },
@@ -581,6 +595,10 @@ export default {
         monitor() {
             let id = this.$route.params.id;
             return this.$root.monitorList[id];
+        },
+
+        uptimeWindowMaxDate() {
+            return new Date();
         },
 
         /**
@@ -756,16 +774,6 @@ export default {
     methods: {
         getResBaseURL,
         /**
-         * Convert a date to a datetime-local input value.
-         * @param {Date} date Date
-         * @returns {string} datetime-local value
-         */
-        toDateTimeLocalValue(date) {
-            const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-            return local.toISOString().slice(0, 16);
-        },
-
-        /**
          * Get the selected preset, or 24h if the current mode is custom.
          * @returns {{key: string, hours: number}} Preset
          */
@@ -788,8 +796,8 @@ export default {
             const start = new Date(end.getTime() - preset.hours * 60 * 60 * 1000);
 
             this.uptimeWindow.preset = preset.key;
-            this.uptimeWindow.start = this.toDateTimeLocalValue(start);
-            this.uptimeWindow.end = this.toDateTimeLocalValue(end);
+            this.uptimeWindow.start = start;
+            this.uptimeWindow.end = end;
 
             if (fetchResult) {
                 this.applyUptimeWindow();
@@ -805,32 +813,48 @@ export default {
                 return;
             }
 
-            const start = new Date(this.uptimeWindow.start);
-            const end = new Date(this.uptimeWindow.end);
+            const start = this.toDate(this.uptimeWindow.start);
+            const end = this.toDate(this.uptimeWindow.end);
 
             if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
                 this.$root.toastError(this.$t("Invalid date range"));
                 return;
             }
 
+            const range = {
+                start: start.toISOString(),
+                end: end.toISOString(),
+            };
+
             this.uptimeWindow.loading = true;
             this.$root.getSocket().emit(
                 "getMonitorUptimeWindow",
                 this.monitor.id,
-                {
-                    start: start.toISOString(),
-                    end: end.toISOString(),
-                },
+                range,
                 (res) => {
                     this.uptimeWindow.loading = false;
 
                     if (res.ok) {
                         this.uptimeWindow.result = res.data;
+                        this.uptimeWindow.appliedRange = range;
                     } else {
                         this.$root.toastError(res.msg);
                     }
                 }
             );
+        },
+
+        /**
+         * Convert datepicker values to a Date object.
+         * @param {Date|string|number} value Date value
+         * @returns {Date} Date object
+         */
+        toDate(value) {
+            if (value instanceof Date) {
+                return value;
+            }
+
+            return new Date(value);
         },
 
         /**
@@ -1158,6 +1182,10 @@ export default {
 .uptime-window-box {
     h3 {
         font-size: 20px;
+    }
+
+    .uptime-window-datepicker {
+        width: 100%;
     }
 
     .uptime-window-result {
