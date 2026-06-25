@@ -320,6 +320,78 @@ describe("Uptime Calculator", () => {
         );
     });
 
+    test("getDataInRange() uses requested hourly precision for a short custom window", async () => {
+        UptimeCalculator.currentDate = dayjs.utc("2023-08-12 14:05:00");
+
+        let c2 = new UptimeCalculator();
+        await c2.update(UP, 100, dayjs.utc("2023-08-12 12:00:15"));
+        await c2.update(UP, 200, dayjs.utc("2023-08-12 12:30:15"));
+        await c2.update(DOWN, 0, dayjs.utc("2023-08-12 13:00:20"));
+
+        let data = c2.getDataInRange("2023-08-12T12:00:00.000Z", "2023-08-12T13:59:59.999Z", "hour");
+
+        assert.strictEqual(data.uptime, 2 / 3);
+        assert.strictEqual(data.avgPing, 150);
+        assert.strictEqual(data.up, 2);
+        assert.strictEqual(data.down, 1);
+        assert.strictEqual(data.total, 3);
+        assert.strictEqual(data.precision, "hour");
+    });
+
+    test("getDataArrayInRange() uses requested daily precision for a range that auto would render hourly", async () => {
+        UptimeCalculator.currentDate = dayjs.utc("2023-08-12 12:05:00");
+
+        let c2 = new UptimeCalculator();
+        await c2.update(UP, 100, dayjs.utc("2023-08-10 12:10:00"));
+        await c2.update(DOWN, 0, dayjs.utc("2023-08-11 12:20:00"));
+        await c2.update(UP, 200, dayjs.utc("2023-08-12 12:30:00"));
+
+        let data = c2.getDataArrayInRange("2023-08-10T00:00:00.000Z", "2023-08-12T23:59:59.999Z", "day");
+
+        assert.deepStrictEqual(
+            data.map((item) => item.timestamp),
+            [
+                dayjs.utc("2023-08-12 00:00:00").unix(),
+                dayjs.utc("2023-08-11 00:00:00").unix(),
+                dayjs.utc("2023-08-10 00:00:00").unix(),
+            ]
+        );
+        assert.deepStrictEqual(
+            data.map((item) => ({ up: item.up, down: item.down, avgPing: item.avgPing })),
+            [
+                { up: 1, down: 0, avgPing: 200 },
+                { up: 0, down: 1, avgPing: 0 },
+                { up: 1, down: 0, avgPing: 100 },
+            ]
+        );
+    });
+
+    test("getDataArrayInRange() rejects unsupported requested precision", () => {
+        UptimeCalculator.currentDate = dayjs.utc("2023-08-12 12:05:00");
+
+        let c2 = new UptimeCalculator();
+
+        assert.throws(
+            () => c2.getDataArrayInRange("2023-08-12T12:00:00.000Z", "2023-08-12T12:03:59.999Z", "week"),
+            /Invalid precision/
+        );
+    });
+
+    test("getDataArrayInRange() rejects precision that is too detailed for the selected range", () => {
+        UptimeCalculator.currentDate = dayjs.utc("2023-08-12 12:05:00");
+
+        let c2 = new UptimeCalculator();
+
+        assert.throws(
+            () => c2.getDataArrayInRange("2023-08-10T12:00:00.000Z", "2023-08-12T12:59:59.999Z", "minute"),
+            /Minute precision is only available for ranges up to 24 hours/
+        );
+        assert.throws(
+            () => c2.getDataArrayInRange("2023-07-01T00:00:00.000Z", "2023-08-12T23:59:59.999Z", "hour"),
+            /Hour precision is only available for ranges up to 30 days/
+        );
+    });
+
     test("getDataArrayInRange() returns minutely datapoints for a custom chart window", async () => {
         UptimeCalculator.currentDate = dayjs.utc("2023-08-12 12:05:00");
 

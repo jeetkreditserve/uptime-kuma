@@ -26,7 +26,7 @@ module.exports.exportSocketHandler = (socket) => {
 
             callback({
                 ok: true,
-                data: uptimeCalculator.getDataInRange(range.start, range.end),
+                data: uptimeCalculator.getDataInRange(range.start, range.end, range.precision),
             });
         } catch (e) {
             callback({

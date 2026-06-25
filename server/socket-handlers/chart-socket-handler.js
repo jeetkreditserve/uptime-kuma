@@ -57,7 +57,7 @@ module.exports.chartSocketHandler = (socket) => {
 
             callback({
                 ok: true,
-                data: uptimeCalculator.getDataArrayInRange(range.start, range.end),
+                data: uptimeCalculator.getDataArrayInRange(range.start, range.end, range.precision),
             });
         } catch (e) {
             callback({

@@ -106,7 +106,7 @@ export default {
                 return "";
             }
 
-            return `${this.formatRangeDateTime(this.range.start)} - ${this.formatRangeDateTime(this.range.end)}`;
+            return `${this.formatRangeDateTime(this.range.start)} - ${this.formatRangeDateTime(this.range.end)} · ${this.formatRangePrecisionLabel()}`;
         },
         chartOptions() {
             return {
@@ -335,10 +335,32 @@ export default {
         formatRangeDateTime(value) {
             return this.$root.toDayjs(value).format("DD-MM-YYYY HH:mm");
         },
+        formatRangePrecisionLabel() {
+            if (this.range.precision === "auto" && this.range.resolvedPrecision) {
+                return `${this.$t("Auto")} (${this.$t(this.range.resolvedPrecision)})`;
+            }
+
+            if (this.range.precision) {
+                return this.$t(this.range.precision);
+            }
+
+            return this.$t(this.getRangePrecision(this.range));
+        },
         getRangeDurationHours(range) {
             const start = this.$root.toDayjs(range.start);
             const end = this.$root.toDayjs(range.end);
             return end.diff(start, "hour", true);
+        },
+        getRangePrecision(range) {
+            if (range.resolvedPrecision) {
+                return range.resolvedPrecision;
+            }
+
+            if (range.precision && range.precision !== "auto") {
+                return range.precision;
+            }
+
+            return this.getPrecisionForHours(this.getRangeDurationHours(range));
         },
         getPrecisionForHours(hours) {
             if (hours <= 24) {
@@ -375,7 +397,7 @@ export default {
 
             this.loading = true;
             this.chartRawData = null;
-            this.chartRawDataPrecision = this.getPrecisionForHours(this.getRangeDurationHours(this.range));
+            this.chartRawDataPrecision = this.getRangePrecision(this.range);
 
             this.$root.getMonitorChartDataInRange(this.monitorId, this.range, (res) => {
                 if (!res.ok) {

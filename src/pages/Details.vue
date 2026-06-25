@@ -349,6 +349,21 @@
                             {{ $t("Apply") }}
                         </button>
                     </div>
+                    <div class="col-12">
+                        <label class="form-label">{{ $t("Precision") }}</label>
+                        <div class="btn-group btn-group-sm uptime-window-precision" role="group">
+                            <button
+                                v-for="precision in uptimeWindowPrecisionOptions"
+                                :key="precision.key"
+                                type="button"
+                                class="btn btn-outline-primary"
+                                :class="{ active: uptimeWindow.precision === precision.key }"
+                                @click="setUptimeWindowPrecision(precision.key)"
+                            >
+                                {{ precision.label }}
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <div v-if="uptimeWindow.result" class="row text-center mt-4 uptime-window-result">
@@ -584,6 +599,7 @@ export default {
                 preset: "24h",
                 start: null,
                 end: null,
+                precision: "auto",
                 appliedRange: null,
                 loading: false,
                 result: null,
@@ -727,6 +743,27 @@ export default {
                 },
             ];
         },
+
+        uptimeWindowPrecisionOptions() {
+            return [
+                {
+                    key: "auto",
+                    label: this.$t("Auto"),
+                },
+                {
+                    key: "minute",
+                    label: this.$t("minute"),
+                },
+                {
+                    key: "hour",
+                    label: this.$t("hour"),
+                },
+                {
+                    key: "day",
+                    label: this.$t("day"),
+                },
+            ];
+        },
     },
 
     watch: {
@@ -805,6 +842,19 @@ export default {
         },
 
         /**
+         * Set the uptime window precision and refresh the applied window.
+         * @param {"auto"|"minute"|"hour"|"day"} precision Precision
+         * @returns {void}
+         */
+        setUptimeWindowPrecision(precision) {
+            this.uptimeWindow.precision = precision;
+
+            if (this.uptimeWindow.start && this.uptimeWindow.end) {
+                this.applyUptimeWindow();
+            }
+        },
+
+        /**
          * Load uptime data for the selected window.
          * @returns {void}
          */
@@ -824,6 +874,7 @@ export default {
             const range = {
                 start: start.toISOString(),
                 end: end.toISOString(),
+                precision: this.uptimeWindow.precision,
             };
 
             this.uptimeWindow.loading = true;
@@ -836,7 +887,10 @@ export default {
 
                     if (res.ok) {
                         this.uptimeWindow.result = res.data;
-                        this.uptimeWindow.appliedRange = range;
+                        this.uptimeWindow.appliedRange = {
+                            ...range,
+                            resolvedPrecision: res.data.precision,
+                        };
                     } else {
                         this.$root.toastError(res.msg);
                     }
@@ -1186,6 +1240,14 @@ export default {
 
     .uptime-window-datepicker {
         width: 100%;
+    }
+
+    .uptime-window-precision {
+        flex-wrap: wrap;
+
+        .btn {
+            min-width: 84px;
+        }
     }
 
     .uptime-window-result {

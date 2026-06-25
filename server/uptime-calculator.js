@@ -692,14 +692,15 @@ class UptimeCalculator {
      * Get uptime data for a specific date-time range.
      * @param {string|Date|dayjs.Dayjs} start Start date-time
      * @param {string|Date|dayjs.Dayjs} end End date-time
+     * @param {"auto"|"minute"|"hour"|"day"} precision Requested precision
      * @returns {{uptime: number|null, avgPing: number|null, up: number, down: number, total: number, precision: "minute"|"hour"|"day", start: string, end: string}} Uptime window data
      * @throws {Error} If the range is invalid
      */
-    getDataInRange(start, end) {
-        const { startDate, endDate, precision, step, dataList } = this.getRangeDataSource(start, end);
+    getDataInRange(start, end, precision = "auto") {
+        const { startDate, endDate, precision: resolvedPrecision, step, dataList } = this.getRangeDataSource(start, end, precision);
 
-        const startKey = this.getKey(startDate, precision, false);
-        const endKey = this.getKey(endDate, precision, false);
+        const startKey = this.getKey(startDate, resolvedPrecision, false);
+        const endKey = this.getKey(endDate, resolvedPrecision, false);
         let up = 0;
         let down = 0;
         let totalPing = 0;
@@ -724,7 +725,7 @@ class UptimeCalculator {
             up,
             down,
             total,
-            precision,
+            precision: resolvedPrecision,
             start: startDate.toISOString(),
             end: endDate.toISOString(),
         };
@@ -734,13 +735,14 @@ class UptimeCalculator {
      * Get chart data for a specific date-time range.
      * @param {string|Date|dayjs.Dayjs} start Start date-time
      * @param {string|Date|dayjs.Dayjs} end End date-time
+     * @param {"auto"|"minute"|"hour"|"day"} precision Requested precision
      * @returns {Array<object>} uptime chart data, newest datapoint first
      * @throws {Error} If the range is invalid
      */
-    getDataArrayInRange(start, end) {
-        const { startDate, endDate, precision, step, dataList } = this.getRangeDataSource(start, end);
-        const startKey = this.getKey(startDate, precision, false);
-        const endKey = this.getKey(endDate, precision, false);
+    getDataArrayInRange(start, end, precision = "auto") {
+        const { startDate, endDate, precision: resolvedPrecision, step, dataList } = this.getRangeDataSource(start, end, precision);
+        const startKey = this.getKey(startDate, resolvedPrecision, false);
+        const endKey = this.getKey(endDate, resolvedPrecision, false);
         const result = [];
 
         for (let key = endKey; key >= startKey; key -= step) {
@@ -761,10 +763,11 @@ class UptimeCalculator {
      * Validate a custom date-time range and select the matching data source.
      * @param {string|Date|dayjs.Dayjs} start Start date-time
      * @param {string|Date|dayjs.Dayjs} end End date-time
+     * @param {"auto"|"minute"|"hour"|"day"} precision Requested precision
      * @returns {{startDate: dayjs.Dayjs, endDate: dayjs.Dayjs, precision: "minute"|"hour"|"day", step: number, dataList: LimitQueue<number,string>}} Range data source
      * @throws {Error} If the range is invalid
      */
-    getRangeDataSource(start, end) {
+    getRangeDataSource(start, end, precision = "auto") {
         const startDate = dayjs.utc(start);
         let endDate = dayjs.utc(end);
         const now = this.getCurrentDate();
@@ -790,8 +793,9 @@ class UptimeCalculator {
         }
 
         const durationHours = endDate.diff(startDate, "hour", true);
+        const resolvedPrecision = this.resolveRangePrecision(precision, durationHours);
 
-        if (durationHours <= 24) {
+        if (resolvedPrecision === "minute") {
             return {
                 startDate,
                 endDate,
@@ -801,7 +805,7 @@ class UptimeCalculator {
             };
         }
 
-        if (durationHours <= 24 * 30) {
+        if (resolvedPrecision === "hour") {
             return {
                 startDate,
                 endDate,
@@ -818,6 +822,51 @@ class UptimeCalculator {
             step: 86400,
             dataList: this.dailyUptimeDataList,
         };
+    }
+
+    /**
+     * Resolve and validate the requested custom range precision.
+     * @param {"auto"|"minute"|"hour"|"day"} precision Requested precision
+     * @param {number} durationHours Range duration in hours
+     * @returns {"minute"|"hour"|"day"} Resolved precision
+     * @throws {Error} If precision is invalid or unavailable for the range
+     */
+    resolveRangePrecision(precision, durationHours) {
+        if (precision == null || precision === "") {
+            precision = "auto";
+        }
+
+        if (typeof precision !== "string") {
+            throw new Error("Invalid precision");
+        }
+
+        precision = precision.toLowerCase();
+
+        if (precision === "auto") {
+            if (durationHours <= 24) {
+                return "minute";
+            }
+
+            if (durationHours <= 24 * 30) {
+                return "hour";
+            }
+
+            return "day";
+        }
+
+        if (!["minute", "hour", "day"].includes(precision)) {
+            throw new Error("Invalid precision");
+        }
+
+        if (precision === "minute" && durationHours > 24) {
+            throw new Error("Minute precision is only available for ranges up to 24 hours");
+        }
+
+        if (precision === "hour" && durationHours > 24 * 30) {
+            throw new Error("Hour precision is only available for ranges up to 30 days");
+        }
+
+        return precision;
     }
 
     /**
